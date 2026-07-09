@@ -1,0 +1,115 @@
+//
+//  MarkdownHTML.swift
+//  SwiftMarkdownHTML
+//
+//  Renders a CommonMark + GitHub-Flavored-Markdown document to HTML via Apple's
+//  swift-markdown (cmark-gfm). Tables, task lists, strikethrough, nested lists,
+//  images, code blocks, and raw HTML are all supported.
+//
+//  Created by David Sherlock on 7/9/26.
+//
+
+import Foundation
+import Markdown
+
+/// Renders Markdown to HTML.
+///
+/// A full CommonMark + GitHub-Flavored-Markdown document (parsed by Apple's
+/// swift-markdown / cmark-gfm) is walked and emitted as HTML — tables, task
+/// lists, strikethrough, nested lists, images, code blocks, raw HTML, the lot.
+///
+/// ```swift
+/// import MarkdownHTML
+///
+/// let html = MarkdownHTML.render("# Hello\n\nSome **bold** text.")
+/// // "<h1>Hello</h1>\n<p>Some <strong>bold</strong> text.</p>\n"
+/// ```
+public enum MarkdownHTML {
+
+    /// Parses `markdown` and returns the rendered HTML.
+    ///
+    /// The input is treated as a complete Markdown document. Text and code are
+    /// HTML-escaped; raw HTML embedded in the Markdown is passed through verbatim.
+    ///
+    /// - Parameter markdown: The Markdown source to render.
+    /// - Returns: The rendered HTML fragment.
+    public static func render(_ markdown: String) -> String {
+        let document = Markdown.Document(parsing: markdown)
+        var renderer = HTMLRenderer()
+        return renderer.visit(document)
+    }
+}
+
+/// Walks a parsed Markdown tree and emits HTML for each node.
+///
+/// Kept private to the module: it is the rendering machinery behind
+/// ``MarkdownHTML/render(_:)`` and not part of the public surface.
+private struct HTMLRenderer: MarkupVisitor {
+    typealias Result = String
+
+    mutating func defaultVisit(_ markup: Markup) -> String {
+        markup.children.map { visit($0) }.joined()
+    }
+
+    mutating func visitText(_ text: Text) -> String { esc(text.string) }
+    mutating func visitParagraph(_ p: Paragraph) -> String { "<p>\(defaultVisit(p))</p>\n" }
+    mutating func visitHeading(_ h: Heading) -> String { "<h\(h.level)>\(defaultVisit(h))</h\(h.level)>\n" }
+    mutating func visitEmphasis(_ e: Emphasis) -> String { "<em>\(defaultVisit(e))</em>" }
+    mutating func visitStrong(_ s: Strong) -> String { "<strong>\(defaultVisit(s))</strong>" }
+    mutating func visitStrikethrough(_ s: Strikethrough) -> String { "<del>\(defaultVisit(s))</del>" }
+    mutating func visitInlineCode(_ c: InlineCode) -> String { "<code>\(esc(c.code))</code>" }
+    mutating func visitBlockQuote(_ b: BlockQuote) -> String { "<blockquote>\(defaultVisit(b))</blockquote>\n" }
+    mutating func visitUnorderedList(_ l: UnorderedList) -> String { "<ul>\n\(defaultVisit(l))</ul>\n" }
+    mutating func visitOrderedList(_ l: OrderedList) -> String { "<ol>\n\(defaultVisit(l))</ol>\n" }
+    mutating func visitThematicBreak(_ t: ThematicBreak) -> String { "<hr>\n" }
+    mutating func visitLineBreak(_ l: LineBreak) -> String { "<br>\n" }
+    mutating func visitSoftBreak(_ s: SoftBreak) -> String { " " }
+    mutating func visitInlineHTML(_ h: InlineHTML) -> String { h.rawHTML }
+    mutating func visitHTMLBlock(_ h: HTMLBlock) -> String { h.rawHTML }
+
+    mutating func visitCodeBlock(_ c: CodeBlock) -> String {
+        let cls = c.language.map { " class=\"language-\(esc($0))\"" } ?? ""
+        return "<pre><code\(cls)>\(esc(c.code))</code></pre>\n"
+    }
+
+    mutating func visitListItem(_ item: ListItem) -> String {
+        let inner = defaultVisit(item)
+        if let box = item.checkbox {
+            let checked = box == .checked ? " checked" : ""
+            return "<li class=\"task\"><input type=\"checkbox\" disabled\(checked)>\(inner)</li>\n"
+        }
+        return "<li>\(inner)</li>\n"
+    }
+
+    mutating func visitLink(_ l: Link) -> String {
+        "<a href=\"\(escAttr(l.destination ?? ""))\">\(defaultVisit(l))</a>"
+    }
+
+    mutating func visitImage(_ img: Image) -> String {
+        "<img src=\"\(escAttr(img.source ?? ""))\" alt=\"\(escAttr(img.plainText))\">"
+    }
+
+    // Tables (GFM)
+    mutating func visitTable(_ table: Table) -> String {
+        "<table>\n\(visit(table.head))\(visit(table.body))</table>\n"
+    }
+    mutating func visitTableHead(_ head: Table.Head) -> String {
+        "<thead><tr>" + head.children.map { "<th>\(visit($0))</th>" }.joined() + "</tr></thead>\n"
+    }
+    mutating func visitTableBody(_ body: Table.Body) -> String {
+        "<tbody>\n" + body.children.map { visit($0) }.joined() + "</tbody>\n"
+    }
+    mutating func visitTableRow(_ row: Table.Row) -> String {
+        "<tr>" + row.children.map { "<td>\(visit($0))</td>" }.joined() + "</tr>\n"
+    }
+    mutating func visitTableCell(_ cell: Table.Cell) -> String { defaultVisit(cell) }
+
+    private func esc(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+         .replacingOccurrences(of: "<", with: "&lt;")
+         .replacingOccurrences(of: ">", with: "&gt;")
+    }
+    private func escAttr(_ s: String) -> String {
+        esc(s).replacingOccurrences(of: "\"", with: "&quot;")
+    }
+}
