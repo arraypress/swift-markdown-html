@@ -1,16 +1,17 @@
 # Swift Markdown HTML
 
-A small Markdown → HTML renderer built on Apple's [swift-markdown](https://github.com/apple/swift-markdown) (cmark-gfm). Give it a CommonMark + GitHub-Flavored-Markdown string and get back an HTML fragment — one static call, no configuration.
+A small Markdown → HTML renderer built on Apple's [swift-markdown](https://github.com/apple/swift-markdown) (cmark-gfm) — its only dependency. Give it a CommonMark + GitHub-Flavored-Markdown string and get back an HTML fragment: one static call, no configuration.
 
 ## Features
 
-- 📝 **CommonMark** — headings, paragraphs, emphasis, lists, block quotes, code
-- 🐙 **GitHub-Flavored** — tables, task lists, strikethrough
-- 🔗 **Links & images** — with attribute escaping
-- 🧱 **Code blocks** — fenced blocks emit `class="language-…"` for syntax highlighting
-- 🛡️ **HTML-escaped** — text and code are escaped; raw HTML in the source passes through
-- 🪶 **One dependency** — Apple's swift-markdown
+- 📝 **One call** — `MarkdownHTML.render(_:)` takes a Markdown string, returns an HTML fragment
+- 🐙 **CommonMark + GFM** — headings, emphasis, nested lists, block quotes, plus tables, task lists (`<li class="task">` with disabled checkboxes), and strikethrough
+- 🧱 **Code blocks** — fenced blocks emit `class="language-…"` on `<code>` for syntax highlighters; the info string is attribute-escaped so it can't inject markup
+- 🛡️ **Escaped output** — text and code are HTML-escaped, link/image attributes are quote-escaped; raw HTML in the source passes through verbatim
+- 🔗 **URL sanitization** — `javascript:`, `vbscript:`, and `data:` link destinations are neutralized to `#` (whitespace/case obfuscation included); image sources allow `data:image/` only
+- 🪶 **One dependency** — Apple's swift-markdown, nothing else
 - 🍎 **Cross-platform** — iOS, macOS, tvOS, watchOS, visionOS
+- 🧪 **Fully tested** — 27 unit tests covering every construct plus the escaping and URL-sanitization edge cases
 
 ## Requirements
 
@@ -18,6 +19,8 @@ A small Markdown → HTML renderer built on Apple's [swift-markdown](https://git
 - Swift 5.9+
 
 ## Installation
+
+### Swift Package Manager
 
 ```swift
 dependencies: [
@@ -30,6 +33,7 @@ dependencies: [
 ```swift
 import MarkdownHTML
 
+// One static call: Markdown in, HTML fragment out.
 let html = MarkdownHTML.render("""
 # Hello
 
@@ -46,6 +50,14 @@ print(html)
 // <li class="task"><input type="checkbox" disabled checked>shipped</li>
 // <li class="task"><input type="checkbox" disabled>todo</li>
 // </ul>
+
+// Fenced code blocks carry the language for client-side highlighters.
+MarkdownHTML.render("```swift\nlet x = 1\n```")
+// <pre><code class="language-swift">let x = 1\n</code></pre>
+
+// Dangerous destinations are neutralized, not passed through.
+MarkdownHTML.render("[click](javascript:alert(1))")
+// <p><a href="#">click</a></p>
 ```
 
 ## License

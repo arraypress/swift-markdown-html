@@ -47,6 +47,7 @@ public enum MarkdownHTML {
 private struct HTMLRenderer: MarkupVisitor {
     typealias Result = String
 
+    /// Renders a node's children in order and concatenates the results.
     mutating func defaultVisit(_ markup: Markup) -> String {
         markup.children.map { visit($0) }.joined()
     }
@@ -120,11 +121,13 @@ private struct HTMLRenderer: MarkupVisitor {
         return s
     }
 
+    /// Escapes `&`, `<`, and `>` for use in HTML text content.
     private func esc(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;")
          .replacingOccurrences(of: "<", with: "&lt;")
          .replacingOccurrences(of: ">", with: "&gt;")
     }
+    /// Escapes text-content characters plus `"` for use inside a quoted HTML attribute.
     private func escAttr(_ s: String) -> String {
         esc(s).replacingOccurrences(of: "\"", with: "&quot;")
     }
