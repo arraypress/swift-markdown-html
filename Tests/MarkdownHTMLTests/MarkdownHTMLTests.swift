@@ -109,4 +109,62 @@ final class MarkdownHTMLTests: XCTestCase {
     func testRawInlineHTMLPassesThrough() {
         XCTAssertTrue(MarkdownHTML.render("text <span>raw</span> more").contains("<span>raw</span>"))
     }
+
+    // MARK: - Security regressions
+
+    func testFenceInfoStringCannotInjectAttributes() {
+        // A double quote in the fence info string must not close the class
+        // attribute and inject an event handler.
+        let html = MarkdownHTML.render("```swift\" onmouseover=\"alert(1)\ncode\n```")
+        XCTAssertFalse(html.contains("onmouseover=\"alert(1)\""))
+        XCTAssertTrue(html.contains("class=\"language-swift&quot; onmouseover=&quot;alert(1)\""))
+    }
+
+    func testJavascriptLinkNeutralized() {
+        let html = MarkdownHTML.render("[click](javascript:alert(document.cookie))")
+        XCTAssertFalse(html.contains("javascript:"))
+        XCTAssertTrue(html.contains("<a href=\"#\">click</a>"))
+    }
+
+    func testVbscriptLinkNeutralized() {
+        let html = MarkdownHTML.render("[click](vbscript:MsgBox(1))")
+        XCTAssertFalse(html.contains("vbscript:"))
+        XCTAssertTrue(html.contains("href=\"#\""))
+    }
+
+    func testJavascriptSchemeCaseAndWhitespaceObfuscationNeutralized() {
+        // Browsers ignore case and embedded tab/newline in the scheme.
+        let html = MarkdownHTML.render("[click](<JaVa\tScRiPt:alert(1)>)")
+        XCTAssertTrue(html.contains("href=\"#\""))
+    }
+
+    func testDataURILinkNeutralized() {
+        let html = MarkdownHTML.render("[click](data:text/html,<script>alert(1)</script>)")
+        XCTAssertFalse(html.contains("data:text/html"))
+        XCTAssertTrue(html.contains("href=\"#\""))
+    }
+
+    func testJavascriptImageNeutralized() {
+        let html = MarkdownHTML.render("![x](javascript:alert(1))")
+        XCTAssertFalse(html.contains("javascript:"))
+        XCTAssertTrue(html.contains("src=\"#\""))
+    }
+
+    func testImageDataURIAllowed() {
+        let html = MarkdownHTML.render("![x](data:image/png;base64,iVBORw0KGgo=)")
+        XCTAssertTrue(html.contains("src=\"data:image/png;base64,iVBORw0KGgo=\""))
+    }
+
+    func testNonImageDataURIImageNeutralized() {
+        let html = MarkdownHTML.render("![x](data:text/html,<script>alert(1)</script>)")
+        XCTAssertFalse(html.contains("data:text/html"))
+        XCTAssertTrue(html.contains("src=\"#\""))
+    }
+
+    func testSafeLinksAndImagesUnaffected() {
+        XCTAssertTrue(MarkdownHTML.render("[a](https://apple.com)").contains("href=\"https://apple.com\""))
+        XCTAssertTrue(MarkdownHTML.render("[m](mailto:me@example.com)").contains("href=\"mailto:me@example.com\""))
+        XCTAssertTrue(MarkdownHTML.render("[r](docs/page.md)").contains("href=\"docs/page.md\""))
+        XCTAssertTrue(MarkdownHTML.render("![i](img.png)").contains("src=\"img.png\""))
+    }
 }

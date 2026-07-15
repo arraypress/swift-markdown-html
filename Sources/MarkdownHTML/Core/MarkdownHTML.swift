@@ -68,7 +68,7 @@ private struct HTMLRenderer: MarkupVisitor {
     mutating func visitHTMLBlock(_ h: HTMLBlock) -> String { h.rawHTML }
 
     mutating func visitCodeBlock(_ c: CodeBlock) -> String {
-        let cls = c.language.map { " class=\"language-\(esc($0))\"" } ?? ""
+        let cls = c.language.map { " class=\"language-\(escAttr($0))\"" } ?? ""
         return "<pre><code\(cls)>\(esc(c.code))</code></pre>\n"
     }
 
@@ -82,11 +82,11 @@ private struct HTMLRenderer: MarkupVisitor {
     }
 
     mutating func visitLink(_ l: Link) -> String {
-        "<a href=\"\(escAttr(l.destination ?? ""))\">\(defaultVisit(l))</a>"
+        "<a href=\"\(escAttr(safeURL(l.destination ?? "")))\">\(defaultVisit(l))</a>"
     }
 
     mutating func visitImage(_ img: Image) -> String {
-        "<img src=\"\(escAttr(img.source ?? ""))\" alt=\"\(escAttr(img.plainText))\">"
+        "<img src=\"\(escAttr(safeURL(img.source ?? "", allowImageData: true)))\" alt=\"\(escAttr(img.plainText))\">"
     }
 
     // Tables (GFM)
@@ -103,6 +103,22 @@ private struct HTMLRenderer: MarkupVisitor {
         "<tr>" + row.children.map { "<td>\(visit($0))</td>" }.joined() + "</tr>\n"
     }
     mutating func visitTableCell(_ cell: Table.Cell) -> String { defaultVisit(cell) }
+
+    /// Neutralizes dangerous URL schemes in a link/image destination.
+    ///
+    /// `javascript:`, `vbscript:`, and (unless `allowImageData` is set and the
+    /// URI is an image) `data:` destinations are replaced with `"#"` so an
+    /// untrusted document can't smuggle a script-executing URL into an
+    /// `href`/`src`. The scheme check strips whitespace/control characters
+    /// first, matching how browsers tolerate them inside URLs.
+    private func safeURL(_ s: String, allowImageData: Bool = false) -> String {
+        let scheme = String(s.lowercased().unicodeScalars.filter { $0.value > 0x20 })
+        if scheme.hasPrefix("javascript:") || scheme.hasPrefix("vbscript:") { return "#" }
+        if scheme.hasPrefix("data:") {
+            return allowImageData && scheme.hasPrefix("data:image/") ? s : "#"
+        }
+        return s
+    }
 
     private func esc(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;")
