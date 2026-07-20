@@ -24,7 +24,7 @@ A small Markdown → HTML renderer built on Apple's [swift-markdown](https://git
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/arraypress/swift-markdown-html.git", branch: "main")
+    .package(url: "https://github.com/Sidewatch/swift-markdown-html.git", branch: "main")
 ]
 ```
 
