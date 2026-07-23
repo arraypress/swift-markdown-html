@@ -61,7 +61,10 @@ private struct HTMLRenderer: MarkupVisitor {
     mutating func visitInlineCode(_ c: InlineCode) -> String { "<code>\(esc(c.code))</code>" }
     mutating func visitBlockQuote(_ b: BlockQuote) -> String { "<blockquote>\(defaultVisit(b))</blockquote>\n" }
     mutating func visitUnorderedList(_ l: UnorderedList) -> String { "<ul>\n\(defaultVisit(l))</ul>\n" }
-    mutating func visitOrderedList(_ l: OrderedList) -> String { "<ol>\n\(defaultVisit(l))</ol>\n" }
+    mutating func visitOrderedList(_ l: OrderedList) -> String {
+        let start = l.startIndex == 1 ? "" : " start=\"\(l.startIndex)\""
+        return "<ol\(start)>\n\(defaultVisit(l))</ol>\n"
+    }
     mutating func visitThematicBreak(_ t: ThematicBreak) -> String { "<hr>\n" }
     mutating func visitLineBreak(_ l: LineBreak) -> String { "<br>\n" }
     mutating func visitSoftBreak(_ s: SoftBreak) -> String { " " }
@@ -122,13 +125,33 @@ private struct HTMLRenderer: MarkupVisitor {
     }
 
     /// Escapes `&`, `<`, and `>` for use in HTML text content.
-    private func esc(_ s: String) -> String {
-        s.replacingOccurrences(of: "&", with: "&amp;")
-         .replacingOccurrences(of: "<", with: "&lt;")
-         .replacingOccurrences(of: ">", with: "&gt;")
-    }
+    ///
+    /// Single UTF-8 pass with a no-specials early return — this runs on every
+    /// text/code node of the live preview's per-pause re-render, and the chained
+    /// `replacingOccurrences` form it replaces bridged the string through
+    /// NSString once per pattern.
+    private func esc(_ s: String) -> String { escaped(s, forAttribute: false) }
+
     /// Escapes text-content characters plus `"` for use inside a quoted HTML attribute.
-    private func escAttr(_ s: String) -> String {
-        esc(s).replacingOccurrences(of: "\"", with: "&quot;")
+    private func escAttr(_ s: String) -> String { escaped(s, forAttribute: true) }
+
+    private func escaped(_ s: String, forAttribute: Bool) -> String {
+        let amp = UInt8(ascii: "&"), lt = UInt8(ascii: "<"), gt = UInt8(ascii: ">")
+        let quot = UInt8(ascii: "\"")
+        let utf8 = s.utf8
+        guard utf8.contains(where: { $0 == amp || $0 == lt || $0 == gt || (forAttribute && $0 == quot) })
+        else { return s }
+        var out = [UInt8]()
+        out.reserveCapacity(utf8.count + 16)
+        for byte in utf8 {
+            switch byte {
+            case amp: out.append(contentsOf: "&amp;".utf8)
+            case lt:  out.append(contentsOf: "&lt;".utf8)
+            case gt:  out.append(contentsOf: "&gt;".utf8)
+            case quot where forAttribute: out.append(contentsOf: "&quot;".utf8)
+            default:  out.append(byte)
+            }
+        }
+        return String(decoding: out, as: UTF8.self)
     }
 }

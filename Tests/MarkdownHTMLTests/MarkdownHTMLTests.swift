@@ -43,6 +43,15 @@ final class MarkdownHTMLTests: XCTestCase {
         XCTAssertTrue(html.contains("<li><p>first</p>"))
     }
 
+    func testOrderedListKeepsStartIndex() {
+        let html = MarkdownHTML.render("3. three\n4. four")
+        XCTAssertTrue(html.contains("<ol start=\"3\">"))
+    }
+
+    func testOrderedListStartingAtOneOmitsStartAttribute() {
+        XCTAssertFalse(MarkdownHTML.render("1. first").contains("start="))
+    }
+
     func testInlineCode() {
         XCTAssertTrue(MarkdownHTML.render("Use `let x = 1` here.").contains("<code>let x = 1</code>"))
     }
@@ -104,6 +113,13 @@ final class MarkdownHTMLTests: XCTestCase {
     func testAttributeEscaping() {
         let html = MarkdownHTML.render("[link](\"weird\")")
         XCTAssertTrue(html.contains("&quot;"))
+    }
+
+    func testEscapingPreservesEntitiesAndNonASCII() {
+        // Pre-escaped-looking text is double-escaped (as the chained form did),
+        // and multi-byte characters pass through untouched.
+        let html = MarkdownHTML.render("`&lt; café < 日本 & \"q\"`")
+        XCTAssertTrue(html.contains("<code>&amp;lt; café &lt; 日本 &amp; \"q\"</code>"))
     }
 
     func testRawInlineHTMLPassesThrough() {
